@@ -1,10 +1,7 @@
 import { ChatMessage, OpenRouterService } from '../services/openrouter';
 import { PlanStep } from '../store/api-keys';
+import logger from '../utils/logger';
 
-/**
- * Planning agent that generates steps to answer financial questions
- * Based on the original CLI implementation's agent_prompt pattern
- */
 export class PlanningAgent {
   private openRouterService: OpenRouterService;
 
@@ -12,6 +9,11 @@ export class PlanningAgent {
     this.openRouterService = new OpenRouterService({
       apiKey: openRouterApiKey,
       model: model || 'anthropic/claude-sonnet-4',
+    });
+    
+    logger.agent('Planner', 'Agent initialized', {
+      model: model || 'anthropic/claude-sonnet-4',
+      hasApiKey: !!openRouterApiKey,
     });
   }
 
@@ -62,6 +64,14 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
     question: string,
     conversationHistory: ChatMessage[] = []
   ): Promise<PlanStep[]> {
+    const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    
+    logger.agent('Planner', 'Starting plan generation', {
+      planId,
+      question,
+      conversationHistoryLength: conversationHistory.length,
+    });
+    
     const messages: ChatMessage[] = [
       {
         role: 'developer',
@@ -75,18 +85,38 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
     ];
 
     try {
+      const startTime = Date.now();
+      
+      logger.debug('Calling OpenRouter for plan generation', {
+        planId,
+        messagesCount: messages.length,
+      });
+      
       const response = await this.openRouterService.complete(messages, {
         temperature: 0.7,
         maxTokens: 1000,
         responseFormat: 'json',
       });
+      
+      const duration = Date.now() - startTime;
 
       // Parse the JSON response
       const plan = JSON.parse(response);
       
+      logger.agent('Planner', 'Received plan response', {
+        planId,
+        duration,
+        responseLength: response.length,
+        parsedType: Array.isArray(plan) ? 'array' : typeof plan,
+      });
+      
       // Validate it's an array
       if (!Array.isArray(plan)) {
-        console.error('Invalid plan format:', plan);
+        logger.error('Invalid plan format - not an array', new Error('Invalid plan format'), {
+          planId,
+          receivedType: typeof plan,
+          received: plan,
+        });
         return [];
       }
 
@@ -97,11 +127,24 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
           title: String(step.title).slice(0, 50), // Limit title length
           description: String(step.description).slice(0, 200), // Allow longer descriptions
         }));
+      
+      logger.agent('Planner', 'Plan generation successful', {
+        planId,
+        duration,
+        originalSteps: plan.length,
+        validatedSteps: validatedPlan.length,
+        steps: validatedPlan.map(s => s.title),
+      });
 
       return validatedPlan;
     } catch (error) {
-      console.error('Error generating plan:', error);
+      logger.error('Error generating plan', error, {
+        planId,
+        question,
+      });
+      
       // Fallback plan for common queries
+      logger.info('Using fallback plan', { planId });
       return this.getFallbackPlan(question);
     }
   }
@@ -112,17 +155,32 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
   async isPlanningComplete(
     conversationHistory: ChatMessage[]
   ): Promise<boolean> {
+    logger.debug('Checking if planning is complete', {
+      conversationHistoryLength: conversationHistory.length,
+    });
+    
     // Check the last assistant message
     const lastMessage = conversationHistory
       .filter(m => m.role === 'assistant')
       .pop();
 
-    if (!lastMessage) return false;
+    if (!lastMessage) {
+      logger.debug('No assistant message found - planning not complete');
+      return false;
+    }
 
     try {
       const plan = JSON.parse(lastMessage.content);
-      return Array.isArray(plan) && plan.length === 0;
+      const isComplete = Array.isArray(plan) && plan.length === 0;
+      
+      logger.debug('Planning complete check result', {
+        isComplete,
+        planLength: Array.isArray(plan) ? plan.length : 'not-array',
+      });
+      
+      return isComplete;
     } catch {
+      logger.debug('Failed to parse last message as JSON - planning not complete');
       return false;
     }
   }
@@ -132,15 +190,25 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
    */
   private getFallbackPlan(question: string): PlanStep[] {
     const query = question.toLowerCase();
+    
+    logger.debug('Generating fallback plan', {
+      question,
+      queryLength: query.length,
+    });
 
     // Check for ticker symbols (1-5 uppercase letters)
     const tickerMatch = question.match(/\b[A-Z]{1,5}\b/);
     const hasTicker = !!tickerMatch;
     const ticker = tickerMatch?.[0];
+    
+    logger.debug('Ticker detection in fallback', {
+      hasTicker,
+      ticker,
+    });
 
     // Check for common query types
     if (hasTicker && (query.includes('price') || query.includes('quote'))) {
-      return [
+      const plan = [
         {
           title: `Get ${ticker} quote`,
           description: `Let me first check ${ticker}'s current price and today's trading performance`,
@@ -150,42 +218,52 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
           description: `I'll also look for any recent news that might be affecting ${ticker}'s price movement`,
         },
       ];
+      logger.info('Fallback plan: price/quote with ticker', { ticker, steps: plan.length });
+      return plan;
     }
 
     if (hasTicker && query.includes('news')) {
-      return [
+      const plan = [
         {
           title: `Get ${ticker} news`,
           description: `Let me retrieve the latest news and developments about ${ticker}`,
         },
       ];
+      logger.info('Fallback plan: news with ticker', { ticker, steps: plan.length });
+      return plan;
     }
 
     if (query.includes('market') || query.includes('today')) {
-      return [
+      const plan = [
         {
           title: 'Get market news',
           description: 'Let me check today\'s market news and see what\'s moving the markets',
         },
       ];
+      logger.info('Fallback plan: market news', { steps: plan.length });
+      return plan;
     }
 
     if (hasTicker) {
-      return [
+      const plan = [
         {
           title: `Research ${ticker}`,
           description: `Let me gather comprehensive information about ${ticker} including price and news`,
         },
       ];
+      logger.info('Fallback plan: general ticker research', { ticker, steps: plan.length });
+      return plan;
     }
 
     // Generic financial research
-    return [
+    const plan = [
       {
         title: 'Search financial news',
         description: 'Let me search for relevant financial news and market information',
       },
     ];
+    logger.info('Fallback plan: generic financial search', { steps: plan.length });
+    return plan;
   }
 
   /**
@@ -196,6 +274,15 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
     executedSteps: Array<{ step: PlanStep; result: unknown }>,
     conversationHistory: ChatMessage[]
   ): Promise<PlanStep[]> {
+    const refineId = `refine_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    
+    logger.agent('Planner', 'Starting plan refinement', {
+      refineId,
+      originalQuestion,
+      executedStepsCount: executedSteps.length,
+      conversationHistoryLength: conversationHistory.length,
+    });
+    
     // Build context from executed steps
     const context = executedSteps
       .map(({ step, result }) => 
@@ -216,26 +303,53 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
     ];
 
     try {
+      const startTime = Date.now();
+      
       const response = await this.openRouterService.complete(messages, {
         temperature: 0.7,
         maxTokens: 500,
         responseFormat: 'json',
       });
+      
+      const duration = Date.now() - startTime;
 
       const additionalSteps = JSON.parse(response);
       
+      logger.agent('Planner', 'Plan refinement response received', {
+        refineId,
+        duration,
+        isArray: Array.isArray(additionalSteps),
+        stepsCount: Array.isArray(additionalSteps) ? additionalSteps.length : 0,
+      });
+      
       if (!Array.isArray(additionalSteps)) {
+        logger.warn('Refined plan is not an array', {
+          refineId,
+          receivedType: typeof additionalSteps,
+        });
         return [];
       }
 
-      return additionalSteps
+      const refined = additionalSteps
         .filter(step => step.title && step.description)
         .map(step => ({
           title: String(step.title).slice(0, 50),
           description: String(step.description).slice(0, 100),
         }));
+      
+      logger.agent('Planner', 'Plan refinement successful', {
+        refineId,
+        duration,
+        additionalSteps: refined.length,
+        steps: refined.map(s => s.title),
+      });
+      
+      return refined;
     } catch (error) {
-      console.error('Error refining plan:', error);
+      logger.error('Error refining plan', error, {
+        refineId,
+        originalQuestion,
+      });
       return [];
     }
   }
@@ -248,5 +362,9 @@ export function createPlanningAgent(
   openRouterApiKey: string,
   model?: string
 ): PlanningAgent {
+  logger.info('Creating Planning Agent', {
+    model: model || 'anthropic/claude-sonnet-4',
+    hasApiKey: !!openRouterApiKey,
+  });
   return new PlanningAgent(openRouterApiKey, model);
 }

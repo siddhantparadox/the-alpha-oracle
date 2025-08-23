@@ -155,10 +155,38 @@ export function ChatInterface() {
             updatedSteps[errorData.stepIndex].status = 'failed';
             setPlan(updatedSteps);
           }
+        } else if (event.event === 'executionResults') {
+          // NEW: Handle dedicated execution results event
+          const resultsData = JSON.parse(event.data);
+          console.log('Execution results event received:', {
+            hasResults: !!resultsData.results,
+            resultsLength: resultsData.results?.length || 0,
+            resultsPreview: resultsData.results?.slice(0, 2).map((r: ExecutionResult) => ({
+              stepTitle: r?.step?.title,
+              provider: r?.provider,
+              hasData: !!r?.data,
+            })),
+          });
+          
+          if (resultsData.results && Array.isArray(resultsData.results)) {
+            tempResults.push(...resultsData.results);
+            console.log('Stored execution results from dedicated event:', tempResults.length);
+          } else {
+            console.warn('No results found in execution results event!');
+          }
         } else if (event.event === 'summary') {
           const summaryData = JSON.parse(event.data);
-          // Store execution results for the answer phase
-          tempResults.push(...summaryData.results || []);
+          console.log('Summary event received:', {
+            hasSummary: !!summaryData.summary,
+            summaryLength: summaryData.summary?.length || 0,
+          });
+          
+          // Note: execution results now come in a separate event
+          // This is just for backward compatibility
+          if (summaryData.results && Array.isArray(summaryData.results)) {
+            tempResults.push(...summaryData.results);
+            console.log('Stored execution results from summary (legacy):', tempResults.length);
+          }
         } else if (event.event === 'done') {
           // Mark all steps as done
           const finalSteps = currentSteps.map(step => ({ ...step, status: 'done' as const }));
@@ -167,6 +195,15 @@ export function ChatInterface() {
       }
 
       setExecutionResults(tempResults);
+      
+      console.log('About to send answer request with execution results:', {
+        tempResultsLength: tempResults.length,
+        tempResultsSample: tempResults.slice(0, 2).map(r => ({
+          stepTitle: r?.step?.title,
+          hasData: !!r?.data,
+          dataSize: r?.data ? JSON.stringify(r.data).length : 0,
+        })),
+      });
 
       // Phase 2: Generate Answer
       const answerResponse = await fetch('/api/answer', {

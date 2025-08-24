@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
-import { useApiKeys, useConversation, Message, PlanStep } from '@/lib/store/api-keys';
+import { useSettings, useConversation, Message, PlanStep } from '@/lib/store/api-keys';
 import { MarkdownRenderer } from './markdown-renderer';
 import { SettingsModal } from './settings-modal';
 import { SSEConsumer } from '@/lib/sse/stream-helper';
@@ -15,7 +15,7 @@ import { ExecutionResult } from '@/lib/agents/executor';
 import { ResearchSummary } from './research-summary';
 
 export function ChatInterface() {
-  const { openRouterKey, hasValidKey } = useApiKeys();
+  const { openRouterKey, hasValidKey, maxSteps } = useSettings();
   const {
     messages,
     isLoading,
@@ -70,6 +70,7 @@ export function ChatInterface() {
           query: userMessage,
           openrouterKey: openRouterKey,
           conversationHistory: messages.slice(-10), // Last 10 messages for context
+          maxSteps,
         }),
       });
 

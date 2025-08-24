@@ -15,6 +15,7 @@ interface PlanRunRequest {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  maxSteps?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body: PlanRunRequest = await req.json();
-    const { query, openrouterKey, conversationHistory = [] } = body;
+    const { query, openrouterKey, conversationHistory = [], maxSteps = 15 } = body;
 
     logger.data('Request payload', {
       query,
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
         
         const planTimer = logger.startTimer('Plan Generation');
         const planner = new PlanningAgent(openrouterKey);
-        const planSteps = await planner.generatePlan(query, conversationHistory);
+        const planSteps = await planner.generatePlan(query, conversationHistory, maxSteps);
         const planDuration = planTimer();
         
         logger.agent('Planner', 'Plan generated successfully', {

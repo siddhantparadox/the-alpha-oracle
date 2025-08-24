@@ -1,20 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface ApiKeysState {
+interface SettingsState {
   openRouterKey: string | null;
   model: string;
+  maxSteps: number;
   setOpenRouterKey: (key: string) => void;
   setModel: (model: string) => void;
+  setMaxSteps: (steps: number) => void;
   clearKeys: () => void;
   hasValidKey: () => boolean;
 }
 
-export const useApiKeys = create<ApiKeysState>()(
+export const useSettings = create<SettingsState>()(
   persist(
     (set, get) => ({
       openRouterKey: null,
       model: 'anthropic/claude-sonnet-4',
+      maxSteps: 7,
       
       setOpenRouterKey: (key: string) => {
         set({ openRouterKey: key });
@@ -22,6 +25,10 @@ export const useApiKeys = create<ApiKeysState>()(
       
       setModel: (model: string) => {
         set({ model });
+      },
+
+      setMaxSteps: (steps: number) => {
+        set({ maxSteps: steps });
       },
       
       clearKeys: () => {
@@ -38,6 +45,7 @@ export const useApiKeys = create<ApiKeysState>()(
       partialize: (state) => ({
         openRouterKey: state.openRouterKey,
         model: state.model,
+        maxSteps: state.maxSteps,
       }),
     }
   )

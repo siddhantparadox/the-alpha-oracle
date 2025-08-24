@@ -13,9 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Key, Check, AlertCircle } from 'lucide-react';
-import { useApiKeys } from '@/lib/store/api-keys';
+import { Settings, Key, Check, AlertCircle, Info } from 'lucide-react';
+import { useSettings } from '@/lib/store/api-keys';
 import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 
 interface SettingsModalProps {
   trigger?: React.ReactNode;
@@ -32,11 +33,22 @@ export function SettingsModal({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
 
-  const { openRouterKey, setOpenRouterKey } = useApiKeys();
+  const { openRouterKey, setOpenRouterKey, maxSteps, setMaxSteps } = useSettings();
   const [localKey, setLocalKey] = React.useState('');
   const [showKey, setShowKey] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
+  // Load the current key when modal opens
+  React.useEffect(() => {
+    if (open && openRouterKey) {
+      setLocalKey(openRouterKey);
+    }
+  }, [open, openRouterKey]);
+
+  const handleMaxStepsChange = (value: number[]) => {
+    setMaxSteps(value[0]);
+  };
+ 
   // Load the current key when modal opens
   React.useEffect(() => {
     if (open && openRouterKey) {
@@ -143,11 +155,27 @@ export function SettingsModal({
             )}
           </div>
 
-          {/* Additional API Keys Info */}
-          <div className="rounded-lg bg-muted p-3 space-y-2">
-            <p className="text-sm font-medium">Other API Keys</p>
-            <p className="text-xs text-muted-foreground">
-              Brave Search and Financial Modeling Prep (FMP) API keys are configured server-side for this demo.
+          <div className="space-y-2">
+            <Label htmlFor="max-steps" className="flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Maximum Research Steps
+            </Label>
+            <div className="flex items-center gap-4">
+              <Slider
+                id="max-steps"
+                min={3}
+                max={15}
+                step={1}
+                value={[maxSteps]}
+                onValueChange={handleMaxStepsChange}
+                className="flex-grow"
+              />
+              <span className="w-12 text-center text-sm font-medium bg-muted rounded-md py-1">
+                {maxSteps}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Set the maximum number of steps for the research plan.
             </p>
           </div>
         </div>

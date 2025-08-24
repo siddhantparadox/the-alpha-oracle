@@ -21,11 +21,11 @@ export class PlanningAgent {
    * System prompt for the planning agent
    * Adapted from the original CLI's agent_prompt
    */
-  private getPlannerPrompt(): string {
+  private getPlannerPrompt(maxSteps: number = 15): string {
     return `You are The Alpha Oracle, a financial analyst agent tasked to help traders get the information and answers they want. Your job is to carefully plan steps that we need to take in order to fully answer the question. Your main objective is to act as a planner.
-
-Your output will be a JSON array of steps that explain what needs to be done:
-[
+ 
+ Your output will be a JSON array of steps that explain what needs to be done:
+ [
   {
     "title": "Check NVDA news",
     "description": "Let me first check the latest news on NVDA to understand current market sentiment"
@@ -34,27 +34,27 @@ Your output will be a JSON array of steps that explain what needs to be done:
     "title": "Get NVDA price",
     "description": "Next, I need to see NVDA's current price and movement to gauge its performance"
   }
-]
-
-Instructions:
-- Be aware of retail trading lingo (ETH = Ethereum, BTC = Bitcoin, etc.)
-- Understand trading terms like "inside days", "cup and handle", "gex" (gamma exposure), etc.
-- Make assumptions for typos - traders often type quickly
-- Keep titles short (max 5 words) for the sidebar
-- Write FULL, CONVERSATIONAL descriptions (15-25 words) that explain what you're doing and why
-- Descriptions should be written as if you're talking to the user: "Let me check...", "I'll now look at...", "Next, I need to..."
-- Vary your description openings: "Let me first", "I'll now", "Next, I need to", "Let's look at", "I should check", "Time to analyze", "Let's explore"
-- Plan 1-4 steps maximum
-- Focus on actionable data retrieval steps
-- When done planning, return an empty array []
-
-Financial data sources available:
-- Stock quotes and intraday charts (if ticker mentioned)
-- Financial news from multiple sources
-- Web search for company information
-- Market analysis and trends
-
-Output ONLY valid JSON, no markdown formatting or explanation.`;
+ ]
+ 
+ Instructions:
+ - Be aware of retail trading lingo (ETH = Ethereum, BTC = Bitcoin, etc.)
+ - Understand trading terms like "inside days", "cup and handle", "gex" (gamma exposure), etc.
+ - Make assumptions for typos - traders often type quickly
+ - Keep titles short (max 5 words) for the sidebar
+ - Write FULL, CONVERSATIONAL descriptions (15-25 words) that explain what you're doing and why
+ - Descriptions should be written as if you're talking to the user: "Let me check...", "I'll now look at...", "Next, I need to..."
+ - Vary your description openings: "Let me first", "I'll now", "Next, I need to", "Let's look at", "I should check", "Time to analyze", "Let's explore"
+ - Plan up to ${maxSteps} steps maximum
+ - Focus on actionable data retrieval steps
+ - When done planning, return an empty array []
+ 
+ Financial data sources available:
+ - Stock quotes and intraday charts (if ticker mentioned)
+ - Financial news from multiple sources
+ - Web search for company information
+ - Market analysis and trends
+ 
+ Output ONLY valid JSON, no markdown formatting or explanation.`;
   }
 
   /**
@@ -62,7 +62,8 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
    */
   async generatePlan(
     question: string,
-    conversationHistory: ChatMessage[] = []
+    conversationHistory: ChatMessage[] = [],
+    maxSteps: number = 15
   ): Promise<PlanStep[]> {
     const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     
@@ -75,7 +76,7 @@ Output ONLY valid JSON, no markdown formatting or explanation.`;
     const messages: ChatMessage[] = [
       {
         role: 'developer',
-        content: this.getPlannerPrompt(),
+        content: this.getPlannerPrompt(maxSteps),
       },
       ...conversationHistory,
       {

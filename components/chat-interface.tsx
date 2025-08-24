@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { useSettings, useConversation, Message, PlanStep } from '@/lib/store/api-keys';
 import { MarkdownRenderer } from './markdown-renderer';
 import { SettingsModal } from './settings-modal';
+import { WelcomeScreen } from './welcome-screen';
+import { FAQModal } from './faq-modal';
 import { SSEConsumer } from '@/lib/sse/stream-helper';
 import { ExecutionResult } from '@/lib/agents/executor';
 import { ResearchSummary } from './research-summary';
@@ -20,10 +22,12 @@ export function ChatInterface() {
     messages,
     isLoading,
     currentPlan,
+    hasSeenWelcome,
     addMessage,
     setLoading,
     setPlan,
-    clearMessages
+    clearMessages,
+    setHasSeenWelcome
   } = useConversation();
 
   const [input, setInput] = useState('');
@@ -289,6 +293,15 @@ export function ChatInterface() {
     };
   }, [isDragging]);
 
+  // Show welcome screen if user hasn't seen it yet
+  if (!hasSeenWelcome) {
+    return (
+      <WelcomeScreen
+        onGetStarted={() => setHasSeenWelcome(true)}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Main Chat Area */}
@@ -306,6 +319,14 @@ export function ChatInterface() {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => setHasSeenWelcome(false)}
+              disabled={isLoading}
+            >
+              Welcome
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 clearMessages();
                 setInput('');
@@ -316,6 +337,7 @@ export function ChatInterface() {
             >
               Clear
             </Button>
+            <FAQModal />
             <SettingsModal />
           </div>
         </div>

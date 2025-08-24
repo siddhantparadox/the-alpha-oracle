@@ -79,10 +79,12 @@ interface ConversationState {
   messages: Message[];
   isLoading: boolean;
   currentPlan: PlanStep[];
+  hasSeenWelcome: boolean;
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
   setPlan: (plan: PlanStep[]) => void;
+  setHasSeenWelcome: (seen: boolean) => void;
 }
 
 export const useConversation = create<ConversationState>()(
@@ -91,6 +93,7 @@ export const useConversation = create<ConversationState>()(
       messages: [],
       isLoading: false,
       currentPlan: [],
+      hasSeenWelcome: false,
       
       addMessage: (message) => {
         const newMessage: Message = {
@@ -107,6 +110,10 @@ export const useConversation = create<ConversationState>()(
         set({ messages: [], currentPlan: [], isLoading: false });
       },
       
+      setHasSeenWelcome: (seen) => {
+        set({ hasSeenWelcome: seen });
+      },
+      
       setLoading: (loading) => {
         set({ isLoading: loading });
       },
@@ -119,6 +126,7 @@ export const useConversation = create<ConversationState>()(
       name: 'alpha-oracle-conversation',
       partialize: (state) => ({
         messages: state.messages.slice(-50), // Keep only last 50 messages
+        hasSeenWelcome: state.hasSeenWelcome,
       }),
     }
   )

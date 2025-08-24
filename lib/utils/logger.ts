@@ -55,7 +55,7 @@ class Logger {
       // Create write stream for log file
       this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
       
-      console.log(`[LOGGER] Log file created at: ${this.logFilePath}`);
+      // Log file created - no console output
     } else {
       this.logFilePath = '';
     }
@@ -119,46 +119,24 @@ class Logger {
        }
        
       this.logStream.write(logEntry + '\n', (error) => {
-        if (error) {
-          console.error(`[LOGGER] Failed to write to log file: ${error}`);
-        }
-      });
+       if (error) {
+         // Silently handle write errors - no console output
+       }
+     });
      }
   }
   private log(level: LogLevel, message: string, context?: LogContext | unknown) {
     const timestamp = this.getTimestamp();
-    const color = this.colors[level];
-    const reset = this.colors.RESET;
-    const bold = this.colors.BOLD;
-    const dim = this.colors.DIM;
-
-    // Format the main log line
-    let logLine = `${color}[${level}]${reset} ${dim}${timestamp}${reset}`;
     
     const ctx = context as LogContext | undefined;
     
-    if (ctx?.service) {
-      logLine += ` ${bold}[${ctx.service}]${reset}`;
-    }
-    
-    if (ctx?.method) {
-      logLine += ` ${dim}${ctx.method}${reset}`;
-    }
-    
-    logLine += ` - ${message}`;
-    
-    if (ctx?.duration !== undefined) {
-      logLine += ` ${dim}(${this.formatDuration(ctx.duration)})${reset}`;
-    }
-
-    // Write to console
-    console.log(logLine);
-
-    // Write to file (without color codes)
+    // Write to file only (no console output)
     const plainLogLine = `[${level}] ${timestamp}${ctx?.service ? ` [${ctx.service}]` : ''}${ctx?.method ? ` ${ctx.method}` : ''} - ${message}${ctx?.duration !== undefined ? ` (${this.formatDuration(ctx.duration)})` : ''}`;
+    
+    // Write main log line to file
     this.writeToFile(plainLogLine, context);
 
-    // Log additional context if provided
+    // Log additional context to file if provided
     if (context) {
       const contextObj = typeof context === 'object' && context !== null && !Array.isArray(context)
         ? context as Record<string, unknown>
@@ -168,13 +146,14 @@ class Logger {
       
       if (Object.keys(additionalContext).length > 0) {
         const formattedContext = this.formatData(additionalContext);
-        console.log(`${dim}Context:${reset}`, formattedContext);
+        // Write context to file as well
+        this.writeToFile(`Context: ${formattedContext}`);
       }
     }
 
-    // Add separator for better readability
+    // Add separator to file for better readability
     if (level === 'ERROR' || level === 'API') {
-      console.log(`${dim}${'─'.repeat(80)}${reset}`);
+      this.writeToFile('─'.repeat(80));
     }
   }
 
@@ -297,15 +276,12 @@ class Logger {
 
   // Group logging for related operations
   group(label: string) {
-    const groupLine = `\n${this.colors.BOLD}═══ ${label} ═══${this.colors.RESET}`;
-    console.group(groupLine);
+    // Only write to file, no console output
     this.writeToFile(`═══ ${label} ═══`);
   }
 
   groupEnd() {
-    console.groupEnd();
-    const separator = `${this.colors.DIM}${'─'.repeat(80)}${this.colors.RESET}\n`;
-    console.log(separator);
+    // Only write to file, no console output
     this.writeToFile('─'.repeat(80));
   }
 

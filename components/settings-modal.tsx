@@ -49,12 +49,6 @@ export function SettingsModal({
     setMaxSteps(value[0]);
   };
  
-  // Load the current key when modal opens
-  React.useEffect(() => {
-    if (open && openRouterKey) {
-      setLocalKey(openRouterKey);
-    }
-  }, [open, openRouterKey]);
 
   const handleSave = () => {
     setOpenRouterKey(localKey);
@@ -137,9 +131,9 @@ export function SettingsModal({
             {!localKey && (
               <p className="text-sm text-muted-foreground">
                 Get your API key from{' '}
-                <a 
-                  href="https://openrouter.ai/keys" 
-                  target="_blank" 
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline hover:no-underline"
                 >

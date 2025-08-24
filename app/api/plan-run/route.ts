@@ -85,20 +85,23 @@ export async function POST(req: NextRequest) {
         await sendEvent('plan', { steps: planSteps });
 
         // 2. Execute plan steps
-        // Use environment variables for Brave and FMP API keys
+        // Use environment variables for Brave, FMP, and Polygon API keys
         const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
         const fmpApiKey = process.env.FMP_API_KEY;
+        const polygonApiKey = process.env.POLYGON_API_KEY;
         
         logger.info('API Keys configuration', {
           hasBrave: !!braveApiKey,
           hasFMP: !!fmpApiKey,
+          hasPolygon: !!polygonApiKey,
           hasOpenRouter: !!openrouterKey,
           braveKeyLength: braveApiKey?.length,
           fmpKeyLength: fmpApiKey?.length,
+          polygonKeyLength: polygonApiKey?.length,
           requestId,
         });
         
-        const executor = new Executor(braveApiKey, fmpApiKey);
+        const executor = new Executor(braveApiKey, fmpApiKey, polygonApiKey);
         const executionResults: ExecutionResult[] = [];
         
         logger.info('Starting plan execution', { 

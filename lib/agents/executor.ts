@@ -1,11 +1,12 @@
 import { PlanStep } from '../store/api-keys';
 import { BraveSearchService } from '../services/brave-search';
 import { FMPService } from '../services/fmp';
+import { PolygonService } from '../services/polygon';
 import logger from '../utils/logger';
 
 export interface ExecutionResult {
   step: PlanStep;
-  provider: 'brave_news' | 'brave_web' | 'fmp_quote' | 'fmp_chart' | 'fmp_movers' | 'combined';
+  provider: 'brave_news' | 'brave_web' | 'fmp_quote' | 'fmp_chart' | 'fmp_movers' | 'polygon_quote' | 'polygon_news' | 'polygon_aggregates' | 'combined';
   data: unknown;
   summary?: string;
   error?: string;
@@ -17,15 +18,19 @@ export interface ExecutionResult {
 export class Executor {
   private braveSearch: BraveSearchService;
   private fmpService: FMPService;
+  private polygonService: PolygonService;
 
-  constructor(braveApiKey?: string, fmpApiKey?: string) {
+  constructor(braveApiKey?: string, fmpApiKey?: string, polygonApiKey?: string) {
     this.braveSearch = new BraveSearchService(braveApiKey);
     this.fmpService = new FMPService(fmpApiKey);
+    this.polygonService = new PolygonService(polygonApiKey);
     
     logger.agent('Executor', 'Agent initialized', {
       hasBraveKey: !!braveApiKey,
       hasFMPKey: !!fmpApiKey,
+      hasPolygonKey: !!polygonApiKey,
       fmpAvailable: this.fmpService.isAvailable(),
+      polygonAvailable: this.polygonService.isAvailable(),
     });
   }
 
@@ -47,9 +52,14 @@ export class Executor {
     try {
       const startTime = Date.now();
       
-      // Detect ticker symbols
-      const tickerMatch = combinedText.match(/\b[A-Z]{1,5}\b/g);
-      const tickers = tickerMatch ? [...new Set(tickerMatch)] : [];
+      // Detect ticker symbols - search in original case-sensitive text
+      const originalText = `${title} ${description} ${context || ''}`;
+      // Improved regex: 2-5 uppercase letters, avoiding common single letters and words
+      const tickerMatch = originalText.match(/\b[A-Z]{2,5}\b/g);
+      const commonWords = ['AI', 'IT', 'US', 'UK', 'EU', 'CEO', 'CFO', 'CTO', 'IPO', 'ETF', 'API', 'URL', 'USD', 'NYSE', 'NASDAQ'];
+      const filteredTickers = tickerMatch ?
+        [...new Set(tickerMatch)].filter(ticker => !commonWords.includes(ticker)) : [];
+      const tickers = filteredTickers;
       const primaryTicker = tickers[0];
       
       logger.debug('Ticker detection', {
@@ -272,9 +282,33 @@ export class Executor {
     logger.info(`Fetching quote for ${ticker}`, { stepId, ticker });
     
     try {
+      // Try Polygon first if available, then fallback to FMP
+      if (this.polygonService.isAvailable()) {
+        logger.info(`Trying Polygon for ${ticker} quote`, { stepId, ticker });
+        
+        const polygonQuote = await this.polygonService.getQuote(ticker);
+        
+        if (polygonQuote) {
+          logger.info(`Polygon quote retrieved for ${ticker}`, {
+            stepId,
+            ticker,
+            price: polygonQuote.last?.price,
+          });
+          
+          return {
+            step,
+            provider: 'polygon_quote',
+            data: polygonQuote,
+            summary: PolygonService.formatQuote(polygonQuote),
+          };
+        }
+        
+        logger.info(`No Polygon quote for ${ticker}, trying FMP`, { stepId, ticker });
+      }
+      
       // Use lightweight quote if we only need basic data
       const needsFullQuote = step.description.includes('detail') || step.description.includes('metric');
-      const quote = needsFullQuote 
+      const quote = needsFullQuote
         ? await this.fmpService.getQuote(ticker)
         : await this.fmpService.getQuoteLight(ticker);
       
@@ -304,7 +338,7 @@ export class Executor {
         };
       }
 
-      logger.info(`Quote retrieved for ${ticker}`, {
+      logger.info(`FMP quote retrieved for ${ticker}`, {
         stepId,
         ticker,
         price: quote.price,
@@ -379,12 +413,40 @@ export class Executor {
     logger.info(`Fetching news for ${ticker}`, { stepId, ticker });
     
     try {
+      // Try Polygon news first if available
+      if (this.polygonService.isAvailable()) {
+        logger.info(`Trying Polygon news for ${ticker}`, { stepId, ticker });
+        
+        const polygonNews = await this.polygonService.getNews({
+          ticker,
+          limit: 10,
+          order: 'desc',
+        });
+        
+        if (polygonNews.length > 0) {
+          logger.info(`Polygon news retrieved for ${ticker}`, {
+            stepId,
+            ticker,
+            newsCount: polygonNews.length,
+          });
+          
+          return {
+            step,
+            provider: 'polygon_news',
+            data: polygonNews,
+            summary: PolygonService.formatNews(polygonNews, 5),
+          };
+        }
+        
+        logger.info(`No Polygon news for ${ticker}, trying Brave`, { stepId, ticker });
+      }
+      
       const news = await this.braveSearch.searchNews(`${ticker} stock`, {
         count: 10,
         freshness: 'pd', // Past day for latest news
       });
       
-      logger.info(`News retrieved for ${ticker}`, {
+      logger.info(`Brave news retrieved for ${ticker}`, {
         stepId,
         ticker,
         newsCount: news.length,
@@ -554,10 +616,11 @@ export class Executor {
 /**
  * Factory function to create an executor
  */
-export function createExecutor(braveApiKey?: string, fmpApiKey?: string): Executor {
+export function createExecutor(braveApiKey?: string, fmpApiKey?: string, polygonApiKey?: string): Executor {
   logger.info('Creating Executor', {
     hasBraveKey: !!braveApiKey,
     hasFMPKey: !!fmpApiKey,
+    hasPolygonKey: !!polygonApiKey,
   });
-  return new Executor(braveApiKey, fmpApiKey);
+  return new Executor(braveApiKey, fmpApiKey, polygonApiKey);
 }

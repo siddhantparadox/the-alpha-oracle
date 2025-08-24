@@ -306,7 +306,12 @@ export function ChatInterface() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearMessages}
+              onClick={() => {
+                clearMessages();
+                setInput('');
+                setStreamingMessage('');
+                setExecutionResults([]);
+              }}
               disabled={messages.length === 0 || isLoading}
             >
               Clear

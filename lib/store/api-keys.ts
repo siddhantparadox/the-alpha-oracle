@@ -104,7 +104,7 @@ export const useConversation = create<ConversationState>()(
       },
       
       clearMessages: () => {
-        set({ messages: [], currentPlan: [] });
+        set({ messages: [], currentPlan: [], isLoading: false });
       },
       
       setLoading: (loading) => {
